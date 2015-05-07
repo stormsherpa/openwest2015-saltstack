@@ -1,0 +1,138 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@0.36">
+          <name>ARTIFACT</name>
+          <description>Mezzapp Artifact</description>
+          <quoteValue>false</quoteValue>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_SINGLE_SELECT</type>
+          <propertyFile>/var/lib/jenkins/artifacts.properties</propertyFile>
+          <propertyKey>Mezzapp</propertyKey>
+          <defaultValue>--select--</defaultValue>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@0.36">
+          <name>ENVIRONMENT</name>
+          <description></description>
+          <quoteValue>false</quoteValue>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_SINGLE_SELECT</type>
+          <propertyFile>/var/lib/jenkins/environments.properties</propertyFile>
+          <propertyKey>environments</propertyKey>
+          <defaultValue>--select--</defaultValue>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>RUN_MIGRATIONS</name>
+          <description></description>
+          <defaultValue>true</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash -xe
+
+FULL_ARTIFACT=`/var/lib/jenkins/scripts/find_artifacts.sh Mezzapp $ARTIFACT`
+echo &quot;Found $ARTIFACT at $FULL_ARTIFACT&quot;
+
+BASENAME=`basename $ARTIFACT`
+IFS=&quot;-&quot; read -a VERSIONINFO &lt;&lt;&lt; `basename $ARTIFACT .tar.gz`
+VERSION_HASH=${VERSIONINFO[-1]}
+
+VIRTENV=&quot;vmezzapp-$VERSION_HASH&quot;
+
+
+ENV_LIST_FILE=&quot;/var/lib/jenkins/environments/$ENVIRONMENT.sh&quot;
+if [ ! -f  &quot;$ENV_LIST_FILE&quot; ]; then
+    echo &quot;Environment list file not found!  $ENV_LIST_FILE&quot;
+    exit 1
+fi
+. &quot;$ENV_LIST_FILE&quot;
+
+
+for HOSTNAME in $MEZZAPP_HOSTS; do
+
+
+# Distribute artifact
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME &quot;cat &gt; $ARTIFACT&quot; &lt; $FULL_ARTIFACT
+
+
+
+# Install artifact
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME &quot;bash -xe&quot; &lt;&lt; EOF
+[ -d &quot;$VIRTENV&quot; ] || virtualenv &quot;$VIRTENV&quot;
+
+[ ! -s vmezzapp ] || unlink vmezzapp
+ln -s $VIRTENV vmezzapp
+
+mkdir -p ~/logs
+
+vmezzapp/bin/pip install $ARTIFACT --upgrade
+vmezzapp/bin/pip install uwsgi
+EOF
+
+
+done
+
+######################  Mezzapp Web Hosts ##########################
+
+for HOSTNAME in $MEZZAPP_HOSTS; do
+
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME &quot;bash -xe&quot; &lt;&lt; EOF
+export DJANGO_SETTINGS_MODULE=local_settings
+export MEZZAPP_LOG_LOCATION=/home/mezzapp/logs
+export PYTHONPATH=/home/mezzapp/config
+
+rm -rf static_root/static/*
+
+if [ -f deploy_settings.sh ]; then
+. deploy_settings.sh
+fi
+
+vmezzapp/bin/django-admin.py collectstatic --noinput
+
+
+supervisorctl update
+
+supervisorctl restart mezzapp
+
+EOF
+
+done
+
+
+######################  Mezzapp Migrate ##########################
+
+if [ &quot;$RUN_MIGRATIONS&quot; == &quot;true&quot; ]; then
+
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME &quot;bash -xe&quot; &lt;&lt; EOF
+export DJANGO_SETTINGS_MODULE=local_settings
+export MEZZAPP_LOG_LOCATION=/home/mezzapp/logs
+export PYTHONPATH=/home/mezzapp/config
+
+# Migrations not supported in current version of mezzanine
+# vmezzapp/bin/django-admin.py migrate
+
+EOF
+
+fi</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers/>
+</project>

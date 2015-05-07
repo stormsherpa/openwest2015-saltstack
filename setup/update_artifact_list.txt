@@ -1,0 +1,5 @@
+# Run this as an 'Execute Shell' step in a job to update artifacts. 
+# Trigger this job from other jobs that generate artifacts.
+# find_artifacts.sh has a list of jobs whose output directories should have artifacts.
+
+/var/lib/jenkins/scripts/find_artifacts.sh > /var/lib/jenkins/artifacts.properties

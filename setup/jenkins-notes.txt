@@ -1,0 +1,8 @@
+Required Jenkins Modules:
+
+Git Plugin
+Git Parameter Plugin
+Parameterized Trigger Plugin
+Extended Choice Parameter plugin
+
+

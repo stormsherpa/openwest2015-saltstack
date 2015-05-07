@@ -1,0 +1,88 @@
+#!/bin/bash -xe
+
+###  The contents of this script can be copied into a jenkins job 'Execute Shell' step
+
+FULL_ARTIFACT=`/var/lib/jenkins/scripts/find_artifacts.sh Mezzapp $ARTIFACT`
+echo "Found $ARTIFACT at $FULL_ARTIFACT"
+
+BASENAME=`basename $ARTIFACT`
+IFS="-" read -a VERSIONINFO <<< `basename $ARTIFACT .tar.gz`
+VERSION_HASH=${VERSIONINFO[-1]}
+
+VIRTENV="vmezzapp-$VERSION_HASH"
+
+
+ENV_LIST_FILE="/var/lib/jenkins/environments/$ENVIRONMENT.sh"
+if [ ! -f  "$ENV_LIST_FILE" ]; then
+    echo "Environment list file not found!  $ENV_LIST_FILE"
+    exit 1
+fi
+. "$ENV_LIST_FILE"
+
+
+for HOSTNAME in $MEZZAPP_HOSTS; do
+
+
+# Distribute artifact
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME "cat > $ARTIFACT" < $FULL_ARTIFACT
+
+
+
+# Install artifact
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME "bash -xe" << EOF
+[ -d "$VIRTENV" ] || virtualenv "$VIRTENV"
+
+[ ! -s vmezzapp ] || unlink vmezzapp
+ln -s $VIRTENV vmezzapp
+
+mkdir -p ~/logs
+
+vmezzapp/bin/pip install $ARTIFACT --upgrade
+vmezzapp/bin/pip install uwsgi
+EOF
+
+
+done
+
+######################  Mezzapp Web Hosts ##########################
+
+for HOSTNAME in $MEZZAPP_HOSTS; do
+
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME "bash -xe" << EOF
+export DJANGO_SETTINGS_MODULE=local_settings
+export MEZZAPP_LOG_LOCATION=/home/mezzapp/logs
+export PYTHONPATH=/home/mezzapp/config
+
+rm -rf static_root/static/*
+
+if [ -f deploy_settings.sh ]; then
+. deploy_settings.sh
+fi
+
+vmezzapp/bin/django-admin.py collectstatic --noinput
+
+
+supervisorctl update
+
+supervisorctl restart mezzapp
+
+EOF
+
+done
+
+
+######################  Mezzapp Migrate ##########################
+
+if [ "$RUN_MIGRATIONS" == "true" ]; then
+
+ssh -o StrictHostKeyChecking=no mezzapp@$HOSTNAME "bash -xe" << EOF
+export DJANGO_SETTINGS_MODULE=local_settings
+export MEZZAPP_LOG_LOCATION=/home/mezzapp/logs
+export PYTHONPATH=/home/mezzapp/config
+
+# Migrations not supported in current version of mezzanine
+# vmezzapp/bin/django-admin.py migrate
+
+EOF
+
+fi

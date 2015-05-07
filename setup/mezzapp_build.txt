@@ -1,0 +1,6 @@
+
+# Paste this in as an 'Execute Shell' build step for building Mezzapp
+
+mkdir -p dist
+rm dist/* || true
+python setup.py sdist

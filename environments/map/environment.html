@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{env_name}} map</title>
+    <!-- Bootstrap -->
+    <link href="dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+
+<div class="container">
+<h1>Map of {{env_name}}</h1>
+
+  <h2>Mezzapp</h2>
+  <div class="row">
+    <div class="col-md-4">
+      <h3>Web Hosts</h3>
+  {% set mezzapp_hosts = salt['mine.get']('G@environment:{} and G@roles:mezzapp'.format(env_name), 'pillar.item', expr_form='compound').items() %}
+      <ul>
+        {% for hostname, host in mezzapp_hosts %}
+        <li>
+          <h5>{{hostname}}</h5>
+          <ul>
+            <li><a href="http://{{hostname}}:3000">uWSGI Instance</a></li>
+            <li><a href="http://{{hostname}}:13000">Apache - Static Assets</a></li>
+          </ul>
+        </li>
+        {% endfor %}
+      </ul>
+  
+    </div>
+    <div class="col-md-4">
+      <h3>Other Links</h3>
+      <p>
+        <h4>Load Balancer Admin</h4>
+          <ul>
+  {% set loadbalancer_hosts = salt['mine.get']('G@environment:{} and G@roles:loadbalancer'.format(env_name), 'pillar.item', expr_form='compound').items() %}
+            {% for hostname, host in loadbalancer_hosts %}
+            <li><a href="http://{{hostname}}:8080/">{{hostname}}</a></li>
+            {% endfor %}
+          </ul>
+      </p>
+    </div>
+  </div> 
+</div>
+
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="dist/js/bootstrap.min.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,3 @@
+{% for h in hosts %}
+{{h}}
+{% endfor %}
